@@ -28,11 +28,17 @@ MODELS = [
     "gemini-1.5-chat"
 ]
 
-# 국내외 RSS
+# 국내외 주요 경제 RSS
 RSS_FEEDS = [
     "https://rss.hankyung.com/new/news_section/economy",
     "https://rss.hankyung.com/new/news_section/finance",
     "https://rss.hankyung.com/new/news_section/stock",
+    "https://www.mk.co.kr/rss/economy/",
+    "https://www.sedaily.com/rss/News",
+    "https://www.fnnews.com/rss/economy",
+    "https://www.chosun.com/economy/rss/",
+    "https://rss.joins.com/joins_money_list.xml",
+    "https://rss.donga.com/total.xml",
     "https://feeds.reuters.com/reuters/businessNews",
     "https://www.bloomberg.com/feed/podcast/etf-report.xml"
 ]
@@ -42,7 +48,7 @@ def get_news():
     news_list = []
     for url in RSS_FEEDS:
         feed = feedparser.parse(url)
-        for entry in feed.entries[:50]:  # 최신 50개 뉴스 수집
+        for entry in feed.entries[:50]:  # 최신 50개 뉴스
             title = entry.title
             link = entry.link
             summary = getattr(entry, "summary", "")
