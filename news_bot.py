@@ -1,17 +1,15 @@
 import os
 import feedparser
 import requests
+from bs4 import BeautifulSoup
 from google import genai
 
-# 환경변수
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# Gemini 클라이언트
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 투자 키워드
 SECTOR_KEYWORDS = [
     "M&A","인수","매각","투자","IPO","상장",
     "반도체","AI","배터리","전기차",
@@ -21,92 +19,54 @@ SECTOR_KEYWORDS = [
     "현대차","현대자동차","로봇","한화","SK"
 ]
 
-# 모델 fallback
-MODELS = [
-    "gemini-2.5-chat",
-    "gemini-2.0-chat",
-    "gemini-1.5-chat"
-]
-
-# RSS 피드
 RSS_FEEDS = [
     "https://rss.hankyung.com/new/news_section/economy",
     "https://rss.hankyung.com/new/news_section/finance",
     "https://rss.hankyung.com/new/news_section/stock",
-    "https://www.mk.co.kr/rss/economy/",
-    "https://www.sedaily.com/rss/News",
-    "https://www.fnnews.com/rss/economy",
-    "https://www.chosun.com/economy/rss/",
-    "https://rss.joins.com/joins_money_list.xml",
-    "https://rss.donga.com/total.xml",
-    "https://feeds.reuters.com/reuters/businessNews",
-    "https://www.bloomberg.com/feed/podcast/etf-report.xml"
 ]
 
-# 뉴스 수집
+MODEL = "gemini-1.5-chat"  # 안정적 무료 모델
+
+# HTML 제거
+def clean_html(text):
+    return BeautifulSoup(text, "html.parser").get_text()
+
 def get_news():
     news_list = []
     for url in RSS_FEEDS:
         feed = feedparser.parse(url)
         for entry in feed.entries[:50]:
-            title = entry.title
+            title = clean_html(entry.title)
             link = entry.link
-            summary = getattr(entry, "summary", "")
+            summary = clean_html(getattr(entry, "summary", ""))
             if any(k in title or k in summary for k in SECTOR_KEYWORDS):
                 news_list.append({"title": title, "link": link})
-    return news_list
+    return news_list[:15]  # 최소 15개
 
-# 뉴스 점수화
-def score_news(title):
-    score = 0
-    for keyword in SECTOR_KEYWORDS:
-        if keyword in title:
-            score += 2
-    if "M&A" in title or "인수" in title:
-        score += 3
-    if "금리" in title or "인플레이션" in title:
-        score += 2
-    return score
-
-# 뉴스 필터링 + 최소 15개 확보
-def filter_news(news):
-    scored = [(n, score_news(n["title"])) for n in news]
-    scored_priority = [n for n, s in scored if s >= 1]
-    scored_priority.sort(key=lambda x: score_news(x["title"]), reverse=True)
-
-    if len(scored_priority) < 15:
-        remaining = [n for n in news if n not in scored_priority]
-        scored_priority += remaining[:15 - len(scored_priority)]
-
-    return scored_priority[:15]
-
-# 뉴스 3줄 요약
+# 요약
 def summarize_news(news_item):
     prompt = f"""
 너는 글로벌 헤지펀드 전략가다.
-아래 뉴스 제목과 링크를 보고 투자 관점에서 핵심 내용을 **3줄 요약**만 작성해라.
+아래 뉴스 제목과 링크를 보고 투자 관점에서 **3줄 요약**만 작성해라.
 - 숫자, 기업명, 투자 포인트 중심
-- 링크는 마지막 줄에 넣지 않고 그대로 사용
+- 3줄 이상 작성 금지
 
 뉴스 제목: {news_item['title']}
 뉴스 링크: {news_item['link']}
 """
-    for model in MODELS:
-        try:
-            response = client.chat.completions.create(
-                model=model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3
-            )
-            # 최신 API 기준으로 내용 추출
-            summary = response.choices[0].message.content.strip()
-            if summary:
-                return summary
-        except Exception as e:
-            print(f"{model} 실패 → 다음 모델 시도: {e}")
-    return "요약 생성 실패"
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        summary = response.choices[0].message.content.strip()
+        if summary:
+            return summary
+    except Exception as e:
+        print(f"요약 실패: {e}")
+    return f"요약 생성 실패\n{news_item['title']}\n{news_item['link']}"
 
-# 텔레그램 전송
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
@@ -114,16 +74,12 @@ def send_telegram(message):
     if r.status_code != 200:
         print(f"텔레그램 전송 실패: {r.text}")
 
-# 메인 실행
 def run():
     news = get_news()
-    filtered_news = filter_news(news)
-
     messages = []
-    for n in filtered_news:
+    for n in news:
         summary = summarize_news(n)
         messages.append(f"🔹 {n['title']}\n{summary}\n링크: {n['link']}")
-
     final_message = "📊 Korea Market Hedge Fund Style News\n\n" + "\n\n".join(messages)
     send_telegram(final_message)
 
