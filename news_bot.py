@@ -23,9 +23,9 @@ SECTOR_KEYWORDS = [
 
 # 모델 fallback
 MODELS = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash-exp",
-    "gemini-1.5-flash"
+    "gemini-2.5-chat",
+    "gemini-2.0-chat",
+    "gemini-1.5-chat"
 ]
 
 # 국내외 RSS
@@ -79,22 +79,27 @@ def filter_news(news):
 # 뉴스별 3줄 요약
 def summarize_news(news_item):
     prompt = f"""
-너는 글로벌 헤지펀드 전략가다. 
-아래 뉴스 제목과 링크를 보고 투자 관점에서 **3줄 요약**만 작성해라.
+너는 글로벌 헤지펀드 전략가다.
+아래 뉴스 제목과 링크를 보고 투자 관점에서 핵심 내용을 **3줄 요약**만 작성해라.
+- 숫자, 기업명, 투자 포인트 중심
+- 링크는 마지막 줄에 넣지 않고 그대로 사용
 
 뉴스 제목: {news_item['title']}
 뉴스 링크: {news_item['link']}
 """
     for model in MODELS:
         try:
-            response = client.models.generate_content(
+            response = client.chat.completions.create(
                 model=model,
-                contents=prompt
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.3
             )
-            return response.text if response.text else "요약 없음"
+            summary = response.choices[0].message.content.strip()
+            if summary:
+                return summary
         except Exception as e:
             print(f"{model} 실패 → 다음 모델 시도: {e}")
-    return "모든 모델 호출 실패"
+    return "요약 생성 실패"
 
 # 텔레그램 전송
 def send_telegram(message):
@@ -104,12 +109,11 @@ def send_telegram(message):
     if r.status_code != 200:
         print(f"텔레그램 전송 실패: {r.text}")
 
-# 메인
+# 메인 실행
 def run():
     news = get_news()
     filtered_news = filter_news(news)
 
-    # 각 뉴스별 3줄 요약 + 링크
     messages = []
     for n in filtered_news:
         summary = summarize_news(n)
