@@ -11,7 +11,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 # Gemini 클라이언트
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 섹터 키워드 (투자용)
+# 헤지펀드 스타일 투자 키워드
 SECTOR_KEYWORDS = [
     "M&A","인수","매각","투자","IPO","상장",
     "반도체","AI","배터리","전기차",
@@ -28,12 +28,15 @@ MODELS = [
     "gemini-1.5-flash"
 ]
 
-# 글로벌 + 국내 RSS
+# 국내외 RSS
 RSS_FEEDS = [
-    "https://news.google.com/rss/search?q=한국+증시&hl=ko&gl=KR&ceid=KR:ko",
+    # 국내
+    "https://rss.hankyung.com/new/news_section/economy",
+    "https://rss.hankyung.com/new/news_section/finance",
+    "https://rss.hankyung.com/new/news_section/stock",
+    # 해외
     "https://feeds.reuters.com/reuters/businessNews",
-    "https://www.bloomberg.com/feed/podcast/etf-report.xml",
-    "https://rss.hankyung.com/new/news_section/economy"
+    "https://www.bloomberg.com/feed/podcast/etf-report.xml"
 ]
 
 # 뉴스 수집
@@ -41,14 +44,15 @@ def get_news():
     news_list = []
     for url in RSS_FEEDS:
         feed = feedparser.parse(url)
-        for entry in feed.entries[:5]:
+        for entry in feed.entries[:10]:  # 각 RSS 최신 10개
             title = entry.title
-            # 키워드 필터링
+            link = entry.link
+            # 헤지펀드 스타일 필터링
             if any(k in title for k in SECTOR_KEYWORDS):
-                news_list.append(title)
+                news_list.append({"title": title, "link": link})
     return news_list
 
-# 뉴스 점수화 (헤지펀드 스타일)
+# 뉴스 중요도 스코어링
 def score_news(title):
     score = 0
     for keyword in SECTOR_KEYWORDS:
@@ -61,49 +65,36 @@ def score_news(title):
     return score
 
 def filter_news(news):
-    scored = [(n, score_news(n)) for n in news]
+    scored = [(n, score_news(n["title"])) for n in news]
     scored = [n for n, s in scored if s >= 2]
-    return scored[:7]  # 최대 7개 뉴스
+    # 점수 높은 순 5개만
+    scored.sort(key=lambda x: score_news(x["title"]), reverse=True)
+    return scored[:5]
 
-# Gemini AI 분석
-def analyze_news(news):
-    if not news:
-        return "오늘 중요한 경제 뉴스 없음"
-
-    news_text = "\n".join(news)
+# Gemini AI 뉴스별 요약
+def summarize_news(news_item):
     prompt = f"""
-너는 글로벌 헤지펀드 매크로 전략가다.
+너는 글로벌 헤지펀드 전략가다. 
+아래 뉴스 제목과 내용을 보고 **투자 관점에서 3줄 요약**만 작성해줘.
 
-다음 뉴스들을 분석해서 아래 형식으로 정리해라.
-
-1️⃣ 핵심 이벤트 (3개)
-2️⃣ 시장 영향 (코스피 / 반도체 / 자동차 / AI)
-3️⃣ 투자 인사이트 (롱/숏 아이디어)
-4️⃣ 3줄 요약
-
-뉴스:
-{news_text}
+뉴스 제목: {news_item['title']}
+뉴스 링크: {news_item['link']}
 """
-
     for model in MODELS:
         try:
             response = client.models.generate_content(
                 model=model,
                 contents=prompt
             )
-            return response.text if response.text else "AI 응답 없음"
+            return response.text if response.text else "요약 없음"
         except Exception as e:
             print(f"{model} 실패 → 다음 모델 시도: {e}")
-
     return "모든 모델 호출 실패"
 
-# 텔레그램 발송
+# 텔레그램 전송
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    data = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message
-    }
+    data = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
     r = requests.post(url, data=data)
     if r.status_code != 200:
         print(f"텔레그램 전송 실패: {r.text}")
@@ -112,9 +103,19 @@ def send_telegram(message):
 def run():
     news = get_news()
     filtered_news = filter_news(news)
-    summary = analyze_news(filtered_news)
-    message = f"📊 Korea Market Intelligence\n\n{summary}"
-    send_telegram(message)
+
+    if not filtered_news:
+        send_telegram("오늘 중요한 경제 뉴스 없음")
+        return
+
+    # 각 뉴스별 3줄 요약 + 링크 포함
+    messages = []
+    for n in filtered_news:
+        summary = summarize_news(n)
+        messages.append(f"🔹 {n['title']}\n{summary}\n링크: {n['link']}")
+
+    final_message = "📊 Korea Market Hedge Fund Style News\n\n" + "\n\n".join(messages)
+    send_telegram(final_message)
 
 if __name__ == "__main__":
     run()
