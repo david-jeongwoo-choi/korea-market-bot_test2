@@ -2,7 +2,7 @@ name: Korea Market Bot
 
 on:
   schedule:
-    - cron: '0 23 * * *'
+    - cron: '0 22 * * *'  # 한국 시간 오전 7시 기준 (UTC 22시)
   workflow_dispatch:
 
 jobs:
