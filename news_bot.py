@@ -11,7 +11,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 # Gemini 클라이언트
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 헤지펀드 스타일 키워드
+# 헤지펀드 스타일 투자 키워드
 SECTOR_KEYWORDS = [
     "M&A","인수","매각","투자","IPO","상장",
     "반도체","AI","배터리","전기차",
@@ -42,11 +42,11 @@ def get_news():
     news_list = []
     for url in RSS_FEEDS:
         feed = feedparser.parse(url)
-        for entry in feed.entries[:30]:  # 최신 30개 뉴스
+        for entry in feed.entries[:50]:  # 최신 50개 뉴스 수집
             title = entry.title
             link = entry.link
             summary = getattr(entry, "summary", "")
-            # 키워드 포함 뉴스만
+            # 키워드 포함 뉴스만 우선 수집
             if any(k in title or k in summary for k in SECTOR_KEYWORDS):
                 news_list.append({"title": title, "link": link})
     return news_list
@@ -66,16 +66,15 @@ def score_news(title):
 # 뉴스 필터링 + 최소 15개 확보
 def filter_news(news):
     scored = [(n, score_news(n["title"])) for n in news]
-    # 최소 점수 1 이상
-    scored = [n for n, s in scored if s >= 1]
-    # 점수 높은 순 정렬
-    scored.sort(key=lambda x: score_news(x["title"]), reverse=True)
+    scored_priority = [n for n, s in scored if s >= 1]
+    scored_priority.sort(key=lambda x: score_news(x["title"]), reverse=True)
+
     # 최소 15개 확보
-    if len(scored) < 15:
-        # 점수 상관없이 뉴스 추가
-        remaining = [n for n in news if n not in scored]
-        scored += remaining[:15 - len(scored)]
-    return scored[:15]
+    if len(scored_priority) < 15:
+        remaining = [n for n in news if n not in scored_priority]
+        scored_priority += remaining[:15 - len(scored_priority)]
+
+    return scored_priority[:15]
 
 # 뉴스별 3줄 요약
 def summarize_news(news_item):
@@ -110,11 +109,7 @@ def run():
     news = get_news()
     filtered_news = filter_news(news)
 
-    if not filtered_news:
-        send_telegram("오늘 중요한 경제 뉴스 없음")
-        return
-
-    # 뉴스별 3줄 요약 + 링크
+    # 각 뉴스별 3줄 요약 + 링크
     messages = []
     for n in filtered_news:
         summary = summarize_news(n)
