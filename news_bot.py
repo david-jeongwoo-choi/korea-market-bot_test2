@@ -50,10 +50,9 @@ def analyze_news(news):
 다음 뉴스들을 헤지펀드 투자자 관점에서 분석해줘.
 
 각 뉴스마다
-
-제목
-3줄 요약
-시장 영향
+- 제목
+- 3줄 요약
+- 시장 영향
 
 형식으로 정리.
 
@@ -61,12 +60,23 @@ def analyze_news(news):
 {news}
 """
 
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt
-    )
+    models = [
+        "gemini-1.5-flash-latest",
+        "gemini-1.5-pro-latest"
+    ]
 
-    return response.text
+    for model in models:
+        try:
+            response = client.models.generate_content(
+                model=model,
+                contents=prompt
+            )
+            return response.text
+
+        except Exception as e:
+            print(f"{model} 실패 → 다음 모델 시도")
+
+    return "AI 뉴스 분석 실패 (모델 호출 실패)"
 
 
 def send_telegram(message):
