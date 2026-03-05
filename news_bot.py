@@ -19,6 +19,7 @@ SECTOR_KEYWORDS = [
 
 # 국내 주요 경제 뉴스 RSS
 RSS_FEEDS = [
+    # 경제
     "https://rss.hankyung.com/new/news_section/economy",
     "https://rss.hankyung.com/new/news_section/finance",
     "https://rss.hankyung.com/new/news_section/stock",
@@ -26,8 +27,14 @@ RSS_FEEDS = [
     "https://www.sedaily.com/rss/News",
     "https://www.fnnews.com/rss/economy",
     "https://www.chosun.com/economy/rss/",
-    "https://rss.joins.com/joins_money_list.xml",
-    "https://rss.donga.com/total.xml",
+    # 정치
+    "https://rss.hankyung.com/new/news_section/politics",
+    "https://www.chosun.com/politics/rss/",
+    "https://rss.joins.com/joins_politics_list.xml",
+    # 사회
+    "https://rss.hankyung.com/new/news_section/society",
+    "https://www.chosun.com/society/rss/",
+    "https://rss.joins.com/joins_society_list.xml",
 ]
 
 def clean_html(text):
