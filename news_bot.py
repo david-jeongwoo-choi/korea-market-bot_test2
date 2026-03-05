@@ -11,7 +11,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 # Gemini 클라이언트
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 헤지펀드 스타일 투자 키워드
+# 헤지펀드 스타일 키워드
 SECTOR_KEYWORDS = [
     "M&A","인수","매각","투자","IPO","상장",
     "반도체","AI","배터리","전기차",
@@ -30,11 +30,9 @@ MODELS = [
 
 # 국내외 RSS
 RSS_FEEDS = [
-    # 국내
     "https://rss.hankyung.com/new/news_section/economy",
     "https://rss.hankyung.com/new/news_section/finance",
     "https://rss.hankyung.com/new/news_section/stock",
-    # 해외
     "https://feeds.reuters.com/reuters/businessNews",
     "https://www.bloomberg.com/feed/podcast/etf-report.xml"
 ]
@@ -44,15 +42,16 @@ def get_news():
     news_list = []
     for url in RSS_FEEDS:
         feed = feedparser.parse(url)
-        for entry in feed.entries[:10]:  # 각 RSS 최신 10개
+        for entry in feed.entries[:30]:  # 최신 30개 뉴스
             title = entry.title
             link = entry.link
-            # 헤지펀드 스타일 필터링
-            if any(k in title for k in SECTOR_KEYWORDS):
+            summary = getattr(entry, "summary", "")
+            # 키워드 포함 뉴스만
+            if any(k in title or k in summary for k in SECTOR_KEYWORDS):
                 news_list.append({"title": title, "link": link})
     return news_list
 
-# 뉴스 중요도 스코어링
+# 뉴스 점수화
 def score_news(title):
     score = 0
     for keyword in SECTOR_KEYWORDS:
@@ -64,18 +63,25 @@ def score_news(title):
         score += 2
     return score
 
+# 뉴스 필터링 + 최소 15개 확보
 def filter_news(news):
     scored = [(n, score_news(n["title"])) for n in news]
-    scored = [n for n, s in scored if s >= 2]
-    # 점수 높은 순 5개만
+    # 최소 점수 1 이상
+    scored = [n for n, s in scored if s >= 1]
+    # 점수 높은 순 정렬
     scored.sort(key=lambda x: score_news(x["title"]), reverse=True)
-    return scored[:5]
+    # 최소 15개 확보
+    if len(scored) < 15:
+        # 점수 상관없이 뉴스 추가
+        remaining = [n for n in news if n not in scored]
+        scored += remaining[:15 - len(scored)]
+    return scored[:15]
 
-# Gemini AI 뉴스별 요약
+# 뉴스별 3줄 요약
 def summarize_news(news_item):
     prompt = f"""
 너는 글로벌 헤지펀드 전략가다. 
-아래 뉴스 제목과 내용을 보고 **투자 관점에서 3줄 요약**만 작성해줘.
+아래 뉴스 제목과 링크를 보고 투자 관점에서 **3줄 요약**만 작성해라.
 
 뉴스 제목: {news_item['title']}
 뉴스 링크: {news_item['link']}
@@ -99,7 +105,7 @@ def send_telegram(message):
     if r.status_code != 200:
         print(f"텔레그램 전송 실패: {r.text}")
 
-# 메인 실행
+# 메인
 def run():
     news = get_news()
     filtered_news = filter_news(news)
@@ -108,7 +114,7 @@ def run():
         send_telegram("오늘 중요한 경제 뉴스 없음")
         return
 
-    # 각 뉴스별 3줄 요약 + 링크 포함
+    # 뉴스별 3줄 요약 + 링크
     messages = []
     for n in filtered_news:
         summary = summarize_news(n)
