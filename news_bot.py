@@ -1,111 +1,159 @@
-import feedparser
 import requests
-import datetime
+from bs4 import BeautifulSoup
+from google import genai
 import os
-import google.generativeai as genai
 
-# ======================
-# API KEY
-# ======================
+# ================================
+# 환경변수
+# ================================
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-CHAT_ID = os.getenv("CHAT_ID")
+TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-genai.configure(api_key=GEMINI_API_KEY)
+# ================================
+# Gemini 설정
+# ================================
 
-# ======================
-# 뉴스 RSS
-# ======================
+client = genai.Client(api_key=GEMINI_API_KEY)
 
-RSS_FEEDS = [
+# ================================
+# 키워드
+# ================================
 
-"https://www.hankyung.com/feed/economy",
-"https://www.mk.co.kr/rss/30000001/",
-"https://feeds.reuters.com/reuters/businessNews",
-"https://rss.nytimes.com/services/xml/rss/nyt/Business.xml"
-
+KEYWORDS = [
+"M&A","인수","매각","투자","IPO","상장",
+"반도체","AI","배터리","전기차",
+"금리","인플레이션",
+"구조조정","펀드","사모펀드","PE","VC",
+"지배구조","상법","자본시장법",
+"삼성전자","삼성","현대차","현대자동차",
+"로봇","한화","SK"
 ]
 
-# ======================
-# 뉴스 수집
-# ======================
+# ================================
+# 뉴스 사이트
+# ================================
 
-def collect_news():
+NEWS_SITES = [
 
-    news = []
+"https://www.hankyung.com/economy",
+"https://www.hankyung.com/finance",
+"https://www.mk.co.kr/news/economy",
+"https://www.mk.co.kr/news/stock",
+"https://www.ft.com/markets",
+"https://www.reuters.com/markets",
+"https://www.bloomberg.com/markets"
+]
 
-    for url in RSS_FEEDS:
+# ================================
+# 뉴스 크롤링
+# ================================
 
-        feed = feedparser.parse(url)
+def get_news():
 
-        for entry in feed.entries[:5]:
+    articles = []
 
-            title = entry.title
-            link = entry.link
+    for site in NEWS_SITES:
 
-            news.append(f"{title}\n{link}")
+        try:
 
-    return news
+            res = requests.get(site,timeout=10)
+            soup = BeautifulSoup(res.text,"html.parser")
 
+            links = soup.find_all("a")
 
-# ======================
-# Gemini 분석
-# ======================
+            for link in links:
+
+                title = link.get_text().strip()
+
+                if len(title) < 15:
+                    continue
+
+                for k in KEYWORDS:
+                    if k in title:
+
+                        articles.append(title)
+                        break
+
+        except:
+            pass
+
+    return list(set(articles))[:20]
+
+# ================================
+# AI 분석
+# ================================
 
 def analyze_news(news):
 
-    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+    text = "\n".join(news)
 
     prompt = f"""
-You are a hedge fund analyst.
+너는 헤지펀드 매크로 전략가다.
 
-Summarize these news into a Korea market briefing.
+다음 뉴스 기반으로
+한국 및 글로벌 시장에 중요한 뉴스만 선별해라.
 
-For each news provide:
+각 뉴스는
 
-Title
-3 line summary
-Market impact
+- 제목
+- 3줄 요약
+- 시장 영향
 
-News:
-{news}
+형식으로 작성해라.
+
+뉴스:
+
+{text}
 """
 
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt
+    )
 
     return response.text
 
 
-# ======================
+# ================================
 # 텔레그램 전송
-# ======================
+# ================================
 
-def send_telegram(message):
+def send_telegram(msg):
 
-    url=f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
 
-    data={
-        "chat_id":CHAT_ID,
-        "text":message
+    data = {
+        "chat_id": TELEGRAM_CHAT_ID,
+        "text": msg
     }
 
     requests.post(url,data=data)
 
 
-# ======================
+# ================================
 # 실행
-# ======================
+# ================================
 
 def run():
 
-    news = collect_news()
+    news = get_news()
+
+    if not news:
+        return
 
     report = analyze_news(news)
 
-    send_telegram(report)
+    final = f"""
+📊 Korea Market Intelligence
+{report}
+
+(AI Hedge Fund Briefing)
+"""
+
+    send_telegram(final)
 
 
 if __name__ == "__main__":
-
     run()
