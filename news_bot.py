@@ -7,17 +7,17 @@ from bs4 import BeautifulSoup
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# 투자 키워드
+# 관심 키워드
 SECTOR_KEYWORDS = [
     "M&A","인수","매각","투자","IPO","상장",
     "반도체","AI","배터리","전기차",
-    "구조조정", "국민연금", "경영권",
+    "경영권","국민연금","구조조정",
     "사모펀드","PE","VC","지배구조",
     "상법","자본시장법","삼성전자","삼성",
     "현대차","현대자동차","로봇","한화","SK"
 ]
 
-# 국내 주요 뉴스 RSS (정치/경제/사회)
+# 국내 뉴스 RSS (정치/경제/사회 섹터만)
 RSS_FEEDS = [
     # 경제
     "https://rss.hankyung.com/new/news_section/economy",
@@ -27,6 +27,8 @@ RSS_FEEDS = [
     "https://www.sedaily.com/rss/News",
     "https://www.fnnews.com/rss/economy",
     "https://www.chosun.com/economy/rss/",
+    "https://rss.joins.com/joins_money_list.xml",
+    "https://rss.donga.com/total.xml",
     # 정치
     "https://rss.hankyung.com/new/news_section/politics",
     "https://www.chosun.com/politics/rss/",
@@ -50,6 +52,7 @@ def get_news(min_count=20):
             title = clean_html(entry.title)
             link = entry.link
             summary = clean_html(getattr(entry, "summary", ""))
+            # 키워드 포함 뉴스 + 중복 제거
             if any(k in title or k in summary for k in SECTOR_KEYWORDS):
                 if title not in seen_titles:
                     news_list.append({"title": title, "link": link})
@@ -74,7 +77,7 @@ def run():
     messages = []
     for n in news:
         messages.append(f"🔹 {n['title']}\n링크: {n['link']}")
-    final_message = "📊 Korea Market Focus News\n\n" + "\n\n".join(messages)
+    final_message = "📊 Korea Market Focus News (정치/경제/사회)\n\n" + "\n\n".join(messages)
     send_telegram(final_message)
 
 if __name__ == "__main__":
