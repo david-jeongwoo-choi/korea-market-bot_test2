@@ -7,9 +7,8 @@ from bs4 import BeautifulSoup
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-# 국내외 주요 경제 RSS
+# 국내 주요 경제 뉴스 RSS
 RSS_FEEDS = [
-    # 국내
     "https://rss.hankyung.com/new/news_section/economy",
     "https://rss.hankyung.com/new/news_section/finance",
     "https://rss.hankyung.com/new/news_section/stock",
@@ -19,21 +18,11 @@ RSS_FEEDS = [
     "https://www.chosun.com/economy/rss/",
     "https://rss.joins.com/joins_money_list.xml",
     "https://rss.donga.com/total.xml",
-    # 글로벌
-    "https://feeds.reuters.com/reuters/businessNews",
-    "https://feeds.bbci.co.uk/news/business/rss.xml",
-    "https://www.bloomberg.com/feed/podcast/etf-report.xml",
-    "https://www.cnbc.com/id/10001147/device/rss/rss.html",
-    "https://www.ft.com/?format=rss",
 ]
 
-SECTOR_KEYWORDS = [
-    "M&A","인수","매각","투자","IPO","상장",
-    "반도체","AI","배터리","전기차",
-    "금리","인플레이션","구조조정",
-    "사모펀드","PE","VC","지배구조",
-    "상법","자본시장법","삼성전자","삼성",
-    "현대차","현대자동차","로봇","한화","SK"
+# 관심 키워드 (최우선)
+FOCUS_KEYWORDS = [
+    "지배구조", "경영권", "상법", "자본시장법", "M&A"
 ]
 
 def clean_html(text):
@@ -48,8 +37,8 @@ def get_news(min_count=20):
             title = clean_html(entry.title)
             link = entry.link
             summary = clean_html(getattr(entry, "summary", ""))
-            # 키워드 포함 뉴스만
-            if any(k in title or k in summary for k in SECTOR_KEYWORDS):
+            # 관심 키워드 포함 뉴스만
+            if any(k in title or k in summary for k in FOCUS_KEYWORDS):
                 news_list.append({"title": title, "link": link})
             if len(news_list) >= min_count:
                 break
@@ -57,7 +46,7 @@ def get_news(min_count=20):
             break
     return news_list[:min_count]
 
-# 텔레그램 발송
+# 텔레그램 전송
 def send_telegram(message):
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     data = {"chat_id": TELEGRAM_CHAT_ID, "text": message}
@@ -70,7 +59,7 @@ def run():
     messages = []
     for n in news:
         messages.append(f"🔹 {n['title']}\n링크: {n['link']}")
-    final_message = "📊 Korea + Global Market News\n\n" + "\n\n".join(messages)
+    final_message = "📊 Korea Market Governance & M&A News\n\n" + "\n\n".join(messages)
     send_telegram(final_message)
 
 if __name__ == "__main__":
