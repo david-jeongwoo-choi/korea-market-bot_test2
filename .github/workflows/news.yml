@@ -1,8 +1,8 @@
-name: Korea Market Bot
+name: Korea Market Hedge Fund Bot
 
 on:
   schedule:
-    - cron: '0 22 * * *'  # 한국 시간 오전 7시 기준 (UTC 22시)
+    - cron: '0 22 * * *'  # 한국 오전 7시 기준 (UTC 22시)
   workflow_dispatch:
 
 jobs:
