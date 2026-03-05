@@ -17,7 +17,7 @@ SECTOR_KEYWORDS = [
     "현대차","현대자동차","로봇","한화","SK"
 ]
 
-# 국내 주요 경제 뉴스 RSS
+# 국내 주요 뉴스 RSS (정치/경제/사회)
 RSS_FEEDS = [
     # 경제
     "https://rss.hankyung.com/new/news_section/economy",
