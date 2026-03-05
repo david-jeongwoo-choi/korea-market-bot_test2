@@ -4,30 +4,38 @@ import requests
 from bs4 import BeautifulSoup
 from google import genai
 
+# 환경변수
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
+# Gemini 클라이언트
 client = genai.Client(api_key=GEMINI_API_KEY)
 
+# 투자 키워드
 SECTOR_KEYWORDS = [
     "M&A","인수","매각","투자","IPO","상장",
     "반도체","AI","배터리","전기차",
     "금리","인플레이션","구조조정",
     "사모펀드","PE","VC","지배구조",
     "상법","자본시장법","삼성전자","삼성",
-    "현대차","현대자동차","로봇","한화","SK"
+    "현대차","현대자동차","로봇","한화","SK", "국민연금", "의결권", "경영권"
 ]
 
 RSS_FEEDS = [
     "https://rss.hankyung.com/new/news_section/economy",
     "https://rss.hankyung.com/new/news_section/finance",
     "https://rss.hankyung.com/new/news_section/stock",
+    "https://www.mk.co.kr/rss/economy/",
+    "https://www.sedaily.com/rss/News",
+    "https://www.fnnews.com/rss/economy",
+    "https://www.chosun.com/economy/rss/",
+    "https://rss.joins.com/joins_money_list.xml",
+    "https://rss.donga.com/total.xml",
 ]
 
 MODEL = "gemini-1.5-chat"  # 안정적 무료 모델
 
-# HTML 제거
 def clean_html(text):
     return BeautifulSoup(text, "html.parser").get_text()
 
@@ -43,7 +51,6 @@ def get_news():
                 news_list.append({"title": title, "link": link})
     return news_list[:15]  # 최소 15개
 
-# 요약
 def summarize_news(news_item):
     prompt = f"""
 너는 글로벌 헤지펀드 전략가다.
