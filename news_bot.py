@@ -11,7 +11,7 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 # Gemini 클라이언트
 client = genai.Client(api_key=GEMINI_API_KEY)
 
-# 헤지펀드 스타일 투자 키워드
+# 투자 키워드
 SECTOR_KEYWORDS = [
     "M&A","인수","매각","투자","IPO","상장",
     "반도체","AI","배터리","전기차",
@@ -28,7 +28,7 @@ MODELS = [
     "gemini-1.5-chat"
 ]
 
-# 국내외 주요 경제 RSS
+# RSS 피드
 RSS_FEEDS = [
     "https://rss.hankyung.com/new/news_section/economy",
     "https://rss.hankyung.com/new/news_section/finance",
@@ -48,11 +48,10 @@ def get_news():
     news_list = []
     for url in RSS_FEEDS:
         feed = feedparser.parse(url)
-        for entry in feed.entries[:50]:  # 최신 50개 뉴스
+        for entry in feed.entries[:50]:
             title = entry.title
             link = entry.link
             summary = getattr(entry, "summary", "")
-            # 키워드 포함 뉴스만 우선 수집
             if any(k in title or k in summary for k in SECTOR_KEYWORDS):
                 news_list.append({"title": title, "link": link})
     return news_list
@@ -75,14 +74,13 @@ def filter_news(news):
     scored_priority = [n for n, s in scored if s >= 1]
     scored_priority.sort(key=lambda x: score_news(x["title"]), reverse=True)
 
-    # 최소 15개 확보
     if len(scored_priority) < 15:
         remaining = [n for n in news if n not in scored_priority]
         scored_priority += remaining[:15 - len(scored_priority)]
 
     return scored_priority[:15]
 
-# 뉴스별 3줄 요약
+# 뉴스 3줄 요약
 def summarize_news(news_item):
     prompt = f"""
 너는 글로벌 헤지펀드 전략가다.
@@ -100,6 +98,7 @@ def summarize_news(news_item):
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3
             )
+            # 최신 API 기준으로 내용 추출
             summary = response.choices[0].message.content.strip()
             if summary:
                 return summary
